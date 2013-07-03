@@ -1,24 +1,46 @@
-/*
-  Blink
- Turns on an LED on for one second, then off for one second, repeatedly.
- 
- This example code is in the public domain.
- */
 
-// Pin 13 has an LED connected on most Arduino boards.
-// give it a name:
-int led = 4;
+// Pin 4 has an LED + triac driver connected.
+int AC_LOAD = 4;
+
+/* Pin    |  Interrrupt # | Arduino Platform
+   ---------------------------------------
+   2      |  0            |  All
+   3      |  1            |  All
+*/
+// Pin 3 has our zero crossing detector
+int ZERO_CROSS = 1; // But note this is the interrupt #
+
+int dimming = 128;  // Dimming level (0-128)  0 = ON, 128 = OFF
+
+
 
 // the setup routine runs once when you press reset:
-void setup() {                
-  // initialize the digital pin as an output.
-  pinMode(led, OUTPUT);     
+void setup() {
+  pinMode(AC_LOAD, OUTPUT);
+  attachInterrupt(ZERO_CROSS, zero_crosss_int, RISING);
 }
 
-// the loop routine runs over and over again forever:
-void loop() {
-  digitalWrite(led, HIGH);   // turn the LED on (HIGH is the voltage level)
-  delay(1000);               // wait for a second
-  digitalWrite(led, LOW);    // turn the LED off by making the voltage LOW
-  delay(1000);               // wait for a second
+// the interrupt function must take no parameters and return nothing
+void zero_crosss_int() {
+// function to be fired at the zero crossing to dim the light
+  // Firing angle calculation : 1 full 50Hz wave =1/50=20ms
+  // Every zerocrossing thus: (50Hz)-> 10ms (1/2 Cycle) For 60Hz => 8.33ms
+
+  // 10ms=10000us
+  // (10000us - 10us) / 128 = 75 (Approx) For 60Hz =>65
+  int dimtime = (75*dimming);    // For 60Hz =>65
+  delayMicroseconds(dimtime);    // Off cycle
+  digitalWrite(AC_LOAD, HIGH);   // triac firing
+  delayMicroseconds(10);         // triac On propogation delay
+                                 //(for 60Hz use 8.33)
+  digitalWrite(AC_LOAD, LOW);    // triac no longer firing
 }
+
+// For testing, we just repeatedly cycle the dimming over from dim to bright
+void loop()  {
+  for (int i=5; i <= 128; i++) {
+    dimming=i;
+    delay(10);
+  }
+}
+
