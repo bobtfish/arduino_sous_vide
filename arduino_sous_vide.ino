@@ -12,17 +12,19 @@ int ZERO_CROSS = 1; // But note this is the interrupt #
 
 int dimming = 128;  // Dimming level (0-128)  0 = ON, 128 = OFF
 
-
+int has_seen_interrupt = 0;
 
 // the setup routine runs once when you press reset:
 void setup() {
   pinMode(AC_LOAD, OUTPUT);
+  digitalWrite(AC_LOAD, HIGH);
   attachInterrupt(ZERO_CROSS, zero_crosss_int, RISING);
 }
 
 // the interrupt function must take no parameters and return nothing
 void zero_crosss_int() {
-// function to be fired at the zero crossing to dim the light
+  // function to be fired at the zero crossing to dim the light
+  has_seen_interrupt = 1;
   // Firing angle calculation : 1 full 50Hz wave =1/50=20ms
   // Every zerocrossing thus: (50Hz)-> 10ms (1/2 Cycle) For 60Hz => 8.33ms
 
@@ -38,9 +40,17 @@ void zero_crosss_int() {
 
 // For testing, we just repeatedly cycle the dimming over from dim to bright
 void loop()  {
-  for (int i=5; i <= 128; i++) {
-    dimming=i;
-    delay(10);
+  if (has_seen_interrupt == 0) {
+     digitalWrite(AC_LOAD, HIGH);   // turn the LED on (HIGH is the voltage level)
+     delay(1000);               // wait for a second
+     digitalWrite(AC_LOAD, LOW);    // turn the LED off by making the voltage LOW
+     delay(1000);     
+  }
+  else {
+    for (int i=5; i <= 128; i++) {
+      dimming=i;
+      delay(100);
+    }
   }
 }
 
