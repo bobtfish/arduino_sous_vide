@@ -11,7 +11,9 @@ int AC_LOAD = 4;
 // Pin 3 has our zero crossing detector
 int ZERO_CROSS = 1; // But note this is the interrupt #
 
-int dimming = 128;  // Dimming level (0-128)  0 = ON, 128 = OFF
+int dimming = 5;  // Dimming level (0-128)  5 = ON, 128 = OFF
+
+float desired_temp = 25.0;
 
 int has_seen_interrupt = 0;
 
@@ -44,66 +46,76 @@ void zero_crosss_int() {
 
 // For testing, we just repeatedly cycle the dimming over from dim to bright
 void loop()  {
-  if (has_seen_interrupt == 0) {
-     digitalWrite(AC_LOAD, HIGH);   // turn the LED on (HIGH is the voltage level)
-     delay(1000);               // wait for a second
-     digitalWrite(AC_LOAD, LOW);    // turn the LED off by making the voltage LOW
-     delay(1000);     
-  }
-  else {
-    for (int i=5; i <= 128; i++) {
-      dimming=i;
-      delay(100);
+  float current_temp;
+    current_temp = get_temp();
+    Serial.print("Current temp: ");
+    Serial.println(current_temp);
+    Serial.print("Desired temp: ");
+    Serial.println(desired_temp);
+    Serial.print("Adjustment direction ");
+    if (current_temp > desired_temp) {
+      Serial.println(">");
+      dimming++;
     }
-  }
+    else {
+      Serial.println("<");
+      dimming--;
+    }
+    if (dimming < 5 )
+      dimming = 5;
+    if (dimming > 128)
+      dimming = 128;
+      
+    Serial.print("Dimming level (128 = OFF, 5 = ON): ");
+    Serial.println(dimming);
+    Serial.println("---------------------------------");
+    
 }
 
 
-void loop2(void) {
+float get_temp(void) {
   byte i;
   byte present = 0;
   byte type_s;
   byte data[12];
   byte addr[8];
-  float celsius, fahrenheit;
+  float celsius;
   
-  if ( !ds.search(addr)) {
-    Serial.println("No more addresses.");
-    Serial.println();
+  if ( !ds.search(addr) ) {
     ds.reset_search();
     delay(250);
-    return;
+    ds.search(addr);
   }
   
-  Serial.print("ROM =");
+  /*Serial.print("ROM =");
   for( i = 0; i < 8; i++) {
     Serial.write(' ');
     Serial.print(addr[i], HEX);
-  }
+  }*/
 
   if (OneWire::crc8(addr, 7) != addr[7]) {
       Serial.println("CRC is not valid!");
-      return;
+      return -3;
   }
-  Serial.println();
+  //Serial.println();
  
   // the first ROM byte indicates which chip
   switch (addr[0]) {
     case 0x10:
-      Serial.println("  Chip = DS18S20");  // or old DS1820
+      //Serial.println("  Chip = DS18S20");  // or old DS1820
       type_s = 1;
       break;
     case 0x28:
-      Serial.println("  Chip = DS18B20");
+      //Serial.println("  Chip = DS18B20");
       type_s = 0;
       break;
     case 0x22:
-      Serial.println("  Chip = DS1822");
+      //Serial.println("  Chip = DS1822");
       type_s = 0;
       break;
     default:
-      Serial.println("Device is not a DS18x20 family device.");
-      return;
+      //Serial.println("Device is not a DS18x20 family device.");
+      return -1;
   } 
 
   ds.reset();
@@ -117,17 +129,17 @@ void loop2(void) {
   ds.select(addr);    
   ds.write(0xBE);         // Read Scratchpad
 
-  Serial.print("  Data = ");
-  Serial.print(present, HEX);
-  Serial.print(" ");
+  //Serial.print("  Data = ");
+  //Serial.print(present, HEX);
+  //Serial.print(" ");
   for ( i = 0; i < 9; i++) {           // we need 9 bytes
     data[i] = ds.read();
-    Serial.print(data[i], HEX);
-    Serial.print(" ");
+    //Serial.print(data[i], HEX);
+    //Serial.print(" ");
   }
-  Serial.print(" CRC=");
-  Serial.print(OneWire::crc8(data, 8), HEX);
-  Serial.println();
+  //Serial.print(" CRC=");
+  //Serial.print(OneWire::crc8(data, 8), HEX);
+  //Serial.println();
 
   // Convert the data to actual temperature
   // because the result is a 16 bit signed integer, it should
@@ -149,10 +161,8 @@ void loop2(void) {
     //// default is 12 bit resolution, 750 ms conversion time
   }
   celsius = (float)raw / 16.0;
-  fahrenheit = celsius * 1.8 + 32.0;
-  Serial.print("  Temperature = ");
-  Serial.print(celsius);
-  Serial.print(" Celsius, ");
-  Serial.print(fahrenheit);
-  Serial.println(" Fahrenheit");
+  return celsius;
+  //Serial.print("  Temperature = ");
+  //Serial.print(celsius);
+  //Serial.println(" Celsius");
 }
