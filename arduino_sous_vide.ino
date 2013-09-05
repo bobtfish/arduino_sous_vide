@@ -1,3 +1,4 @@
+#include <LedControl.h>
 #include <OneWire.h>
 
 // Pin 4 has an LED + triac driver connected.
@@ -10,20 +11,39 @@ int AC_LOAD = 4;
 */
 // Pin 3 has our zero crossing detector
 int ZERO_CROSS = 1; // But note this is the interrupt #
-
-int dimming = 5;  // Dimming level (0-128)  5 = ON, 128 = OFF
-
-float desired_temp = 25.0;
-
-int has_seen_interrupt = 0;
-
 OneWire ds(10);
+
+/* 
+ * We use pins 13,12 and 11 on the Arduino for the SPI interface
+ * Pin 13 is connected to the DATA IN-pin of the MAX7221
+ * Pin 12 is connected to the CLK-pin of the MAX7221
+ * Pin 11 is connected to the LOAD(/CS)-pin of the MAX7221 	
+ * There will only be a single MAX7221 attached to the arduino 
+ */
+LedControl lc1=LedControl(13,12,11,1); 
+
+// Pin 6 has UP button
+int INPUT_UP = 6;
+// Pin 5 has DOWN button
+int INPUT_DOWN = 5;
+
+// Variable declarations
+int dimming = 5;  // Dimming level (0-128)  5 = ON, 128 = OFF
+float desired_temp = 25.0; // Initial level
+float adjust_step = 0.1; // The temperature step for each button press..
+int has_seen_interrupt = 0;
+long lastDebounceTime = 0;  // the last time the output pin was toggled
+long debounceDelay = 50;    // the debounce time; increase if the output flickers
+int last_up_reading = 0;
+int last_down_reading = 0;
 
 // the setup routine runs once when you press reset:
 void setup() {
   Serial.begin(9600);
   pinMode(AC_LOAD, OUTPUT);
   digitalWrite(AC_LOAD, HIGH);
+  pinMode(INPUT_UP, INPUT);
+  pinMode(INPUT_DOWN, INPUT);
   attachInterrupt(ZERO_CROSS, zero_crosss_int, RISING);
 }
 
@@ -44,10 +64,40 @@ void zero_crosss_int() {
   digitalWrite(AC_LOAD, LOW);    // triac no longer firing
 }
 
-// For testing, we just repeatedly cycle the dimming over from dim to bright
+void adjust_desired_temp_if_button_pressed() {
+    int up_reading = digitalRead(INPUT_UP);
+    int down_reading = digitalRead(INPUT_DOWN);
+    float adjust = 0;
+
+    if (up_reading > 0) {
+      if (last_up_reading > 0) {
+        adjust = adjust + adjust_step;
+      }
+      else {
+        last_up_reading = 1;
+      }
+    }
+    else {
+      last_up_reading = 0;
+    }
+    if (down_reading > 0) {
+      if (last_down_reading > 0) {
+        adjust = adjust - adjust_step;
+      }
+      else {
+        last_down_reading = 1;
+      }
+    }
+    else {
+      last_down_reading = 0;
+    }
+    desired_temp = desired_temp + adjust;
+}
+
 void loop()  {
-  float current_temp;
+    float current_temp;
     current_temp = get_temp();
+    adjust_desired_temp_if_button_pressed();
     Serial.print("Current temp: ");
     Serial.println(current_temp);
     Serial.print("Desired temp: ");
