@@ -20,7 +20,7 @@ OneWire ds(10);
  * Pin 11 is connected to the LOAD(/CS)-pin of the MAX7221 	
  * There will only be a single MAX7221 attached to the arduino 
  */
-LedControl lc1=LedControl(13,12,11,1); 
+LedControl lc=LedControl(13,12,11,1); 
 
 // Pin 6 has UP button
 int INPUT_UP = 6;
@@ -45,6 +45,10 @@ void setup() {
   pinMode(INPUT_UP, INPUT);
   pinMode(INPUT_DOWN, INPUT);
   attachInterrupt(ZERO_CROSS, zero_crosss_int, RISING);
+  //wake up the MAX72XX from power-saving mode 
+  lc.shutdown(0,false);
+  //set a medium brightness for the Leds
+  lc.setIntensity(0,8);
 }
 
 // the interrupt function must take no parameters and return nothing
@@ -62,6 +66,24 @@ void zero_crosss_int() {
   delayMicroseconds(10);         // triac On propogation delay
                                  //(for 60Hz use 8.33)
   digitalWrite(AC_LOAD, LOW);    // triac no longer firing
+}
+
+void printNumber(int offset, float reading) {
+    int v = (int) reading * 10;
+    int ones;
+    int tens;
+    int hundreds;
+
+    if(v < 0 || v > 999)
+       return;
+    ones=v%10;
+    v=v/10;
+    tens=v%10;
+    v=v/10;
+    hundreds=v;
+    lc.setDigit(0,2+offset,(byte)hundreds,false);
+    lc.setDigit(0,1+offset,(byte)tens,true);
+    lc.setDigit(0,0+offset,(byte)ones,false);
 }
 
 void adjust_desired_temp_if_button_pressed() {
@@ -100,8 +122,10 @@ void loop()  {
     adjust_desired_temp_if_button_pressed();
     Serial.print("Current temp: ");
     Serial.println(current_temp);
+    printNumber(0, current_temp);
     Serial.print("Desired temp: ");
     Serial.println(desired_temp);
+    printNumber(3, desired_temp);
     Serial.print("Adjustment direction ");
     if (current_temp > desired_temp) {
       Serial.println(">");
