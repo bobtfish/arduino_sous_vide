@@ -1,5 +1,7 @@
 #include <LedControl.h>
 #include <OneWire.h>
+#include <EEPROM.h>
+#include "EEPromAnything.h"
 
 // Pin 4 has an LED + triac driver connected.
 int AC_LOAD = 4;
@@ -29,13 +31,18 @@ int INPUT_DOWN = 5;
 
 // Variable declarations
 int dimming = 5;  // Dimming level (0-128)  5 = ON, 128 = OFF
+float eeprom_temp = 25.0; // Initial level
 float desired_temp = 25.0; // Initial level
+float max_temp = 100;
+float min_temp = 20;
 float adjust_step = 0.1; // The temperature step for each button press..
 int has_seen_interrupt = 0;
 long lastDebounceTime = 0;  // the last time the output pin was toggled
 long debounceDelay = 50;    // the debounce time; increase if the output flickers
 int last_up_reading = 0;
 int last_down_reading = 0;
+
+
 
 // the setup routine runs once when you press reset:
 void setup() {
@@ -49,6 +56,7 @@ void setup() {
   lc.shutdown(0,false);
   //set a medium brightness for the Leds
   lc.setIntensity(0,8);
+  EEPROM_readAnything(0, desired_temp);
 }
 
 // the interrupt function must take no parameters and return nothing
@@ -91,29 +99,45 @@ void adjust_desired_temp_if_button_pressed() {
     int down_reading = digitalRead(INPUT_DOWN);
     float adjust = 0;
 
-    if (up_reading > 0) {
+    if (up_reading == 0) {
       if (last_up_reading > 0) {
-        adjust = adjust + adjust_step;
+        if (last_up_reading <= 10) {
+          adjust = adjust + adjust_step;
+        }
+        else {
+          last_up_reading = 10;
+          adjust = adjust + (10*adjust_step);
+        }
       }
-      else {
-        last_up_reading = 1;
-      }
+      last_up_reading = last_up_reading + 1;
     }
     else {
       last_up_reading = 0;
     }
-    if (down_reading > 0) {
+    if (down_reading == 0) {
       if (last_down_reading > 0) {
-        adjust = adjust - adjust_step;
+        if (last_down_reading <= 10) {
+          adjust = adjust - adjust_step;
+        }
+        else {
+          last_down_reading = 10;
+          adjust = adjust - (10*adjust_step);
+        }
       }
-      else {
-        last_down_reading = 1;
-      }
+      last_down_reading = last_down_reading + 1;
     }
     else {
       last_down_reading = 0;
     }
+    if (0 == adjust && eeprom_temp != desired_temp) {
+      EEPROM_writeAnything(0, desired_temp);
+      eeprom_temp = desired_temp;
+    }
     desired_temp = desired_temp + adjust;
+    if (desired_temp > max_temp)
+      desired_temp = max_temp;
+    if (desired_temp < min_temp)
+      desired_temp = min_temp;
 }
 
 void loop()  {
@@ -140,8 +164,8 @@ void loop()  {
     if (dimming > 128)
       dimming = 128;
       
-    Serial.print("Dimming level (128 = OFF, 5 = ON): ");
-    Serial.println(dimming);
+    Serial.print("Power level (0 = OFF, 123 = FULL ON): ");
+    Serial.println(128-dimming);
     Serial.println("---------------------------------");
     
 }
